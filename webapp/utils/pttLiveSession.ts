@@ -40,7 +40,15 @@ export async function getPTTLiveRecognizer(language: string, recorder: Recorder 
 
   const onWebSocketMessage = (e: MessageEvent<string>) => {
     if (typeof e.data === 'string' && (e.data.includes('READY') || e.data.includes('KEEP'))) return;
-    window.dispatchEvent(new CustomEvent('ptt:recognized', { detail: e.data }));
+    try {
+      const parsed = JSON.parse(e.data) as { sentence: string; confidence: number; is_final: boolean };
+      if (!parsed.sentence) return;
+      window.dispatchEvent(new CustomEvent('ptt:recognized', {
+        detail: { text: parsed.sentence, isFinal: parsed.is_final },
+      }));
+    } catch {
+      // non-JSON control frame — ignore
+    }
   };
 
   const startSession = async () => {

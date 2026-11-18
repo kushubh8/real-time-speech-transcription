@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 
@@ -16,6 +16,9 @@ function escapeHtml(unsafeText: string): string {
 export default function TipTapEditor() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage] = useState<string | null>(null);
+  // Tracks the length of the current interim (tentative) text so we can
+  // replace it in-place when the next interim or the final result arrives.
+  const interimLengthRef = useRef(0);
 
   const editor = useEditor({
     extensions: [StarterKit],
@@ -35,10 +38,27 @@ export default function TipTapEditor() {
   useEffect(() => {
     if (!editor) return;
     const handler = (e: Event) => {
-      const custom = e as CustomEvent<string>;
-      const text = typeof custom.detail === 'string' ? custom.detail : '';
+      const custom = e as CustomEvent<{ text: string; isFinal: boolean }>;
+      const { text, isFinal } = custom.detail ?? {};
       if (!text) return;
-      editor.chain().focus().insertContent(`${text} `).run();
+
+      // Delete the previous interim text (if any), then insert the new text.
+      // For interim results we leave interimLengthRef set so the next result
+      // can overwrite it. For final results we clear it — the text is committed.
+      if (interimLengthRef.current > 0) {
+        editor
+          .chain()
+          .focus()
+          .deleteRange({
+            from: editor.state.selection.anchor - interimLengthRef.current,
+            to: editor.state.selection.anchor,
+          })
+          .run();
+      }
+
+      const insert = isFinal ? `${text} ` : text;
+      editor.chain().focus().insertContent(insert).run();
+      interimLengthRef.current = isFinal ? 0 : insert.length;
     };
     window.addEventListener('ptt:recognized', handler as EventListener);
     return () => window.removeEventListener('ptt:recognized', handler as EventListener);

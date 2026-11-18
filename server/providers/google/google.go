@@ -102,8 +102,9 @@ func (s *Session) SendAudio(audioData []byte) error {
 	return s.stream.Send(req)
 }
 
-// ReceiveTranscription receives transcription results from the Google Speech stream.
-// It blocks until a final result is available or an error occurs.
+// ReceiveTranscription receives the next transcription result from the Google Speech stream.
+// Returns immediately for both interim and final results so words appear as they are spoken.
+// Returns io.EOF when the stream is closed.
 func (s *Session) ReceiveTranscription() (providers.TranscriptionResult, error) {
 	for {
 		resp, err := s.stream.Recv()
@@ -115,18 +116,19 @@ func (s *Session) ReceiveTranscription() (providers.TranscriptionResult, error) 
 		}
 
 		for _, result := range resp.Results {
-			if result.IsFinal && len(result.Alternatives) > 0 {
-				alt := result.Alternatives[0]
-				return providers.TranscriptionResult{
-					Text:         alt.Transcript,
-					IsFinal:      true,
-					Confidence:   alt.Confidence,
-					ProviderName: providerName,
-					ReceivedAt:   time.Now(),
-				}, nil
+			if len(result.Alternatives) == 0 {
+				continue
 			}
+			alt := result.Alternatives[0]
+			return providers.TranscriptionResult{
+				Text:         alt.Transcript,
+				IsFinal:      result.IsFinal,
+				Confidence:   alt.Confidence,
+				ProviderName: providerName,
+				ReceivedAt:   time.Now(),
+			}, nil
 		}
-		// Continue loop if no final results found
+		// resp had no usable alternatives — fetch the next response
 	}
 }
 

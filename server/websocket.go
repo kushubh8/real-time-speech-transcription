@@ -61,12 +61,6 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	if sampleRate == 0 {
 		sampleRate = 16000
 	}
-	// config := providers.SessionConfig{
-	// 	SampleRate:     sampleRate,
-	// 	LanguageCode:   "en-US",
-	// 	InterimResults: true,
-	// }
-
 	language := r.URL.Query().Get("language")
 	if language == "" {
 		language = "en-US"
@@ -74,7 +68,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	config := providers.SessionConfig{
 		SampleRate:     sampleRate,
 		LanguageCode:   language,
-		InterimResults: false,
+		InterimResults: true,
 	}
 
 	ctx := context.Background()
@@ -171,15 +165,16 @@ func (wc *WebConn) writer() {
 			return
 		}
 
-		// // Skip empty transcriptions — Google occasionally returns final results
-		// // with no recognized speech (e.g. silence, noise, or incomplete utterances).
-		// if result.Text == "" {
-		// 	continue
-		// }
+		// Skip empty transcriptions — Google occasionally returns final results
+		// with no recognized speech (e.g. silence, noise, or incomplete utterances).
+		if result.Text == "" {
+			continue
+		}
 
 		response := WebSocketResponse{
 			Sentence:   result.Text,
 			Confidence: result.Confidence,
+			IsFinal:    result.IsFinal,
 		}
 
 		if err := wc.conn.WriteJSON(response); err != nil {
